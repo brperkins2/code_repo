@@ -1,0 +1,74 @@
+
+
+%MACRO CALC_INTEREST(INDAT, OUTDAT, END_DT, P, R, DT, TOT_AM, SHOWDETAILS);
+DATA &OUTDAT.;
+	FORMAT P INT_AM &TOT_AM. 10.2;
+	FORMAT RATE DAYS N DAYS_N &TOT_AM. 10.6;
+	FORMAT TXN_DT END_DT DATE9.;
+
+	SET &INDAT.;
+	
+	DAYS = &END_DT. - &DT.;
+	P = &P.;
+	RATE = &R.;
+	N = 365;
+	DAYS_N = DAYS/365;
+	&TOT_AM. = ROUND(P*((1+(RATE/N))**(N*DAYS_N)), .01);
+	INT_AM = &TOT_AM. - ROUND(P, .01);
+
+	TXN_DT = &DT.;
+	END_DT = &END_DT.;
+
+	%IF &SHOWDETAILS. ^= 1 %THEN %DO;
+	DROP P RATE N DAYS_N DAYS;
+	%END;
+RUN;
+%MEND CALC_INTEREST;
+
+
+
+
+
+%macro ExportExcelWithFormat(libname=,dataname=,outputname=,sheetname=);
+proc sql noprint;
+create table tmp_vars as
+select name,format from dictionary.columns
+where libname=upcase("&libname.") and memname=upcase("&dataname.");
+quit;
+data tmp_vars;
+set tmp_vars end=last;
+length formatcode $400.;
+if format ^="" then formatcode=catx(" ",cats("put","(",name,",",format,")"), "as",name,",");
+else formatcode=cats(name,",");
+if last then formatcode=substr(formatcode,1,length(formatcode)-1);
+run;
+%let formatcodes=;
+data _null_;
+set tmp_vars;
+call symput('formatcodes', trim(resolve('&formatcodes.')||' '||trim (formatcode)));
+run;
+proc sql;
+create view tmp_view as
+select &formatcodes.
+from &libname..&dataname.;
+quit;
+%let formatcodes=%str();
+PROC EXPORT DATA= tmp_view OUTFILE= "&outputname." DBMS=XLSX REPLACE;
+SHEET="&sheetname.";
+RUN;
+proc sql;drop table tmp_vars;drop view tmp_view;quit; 
+%mend;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
